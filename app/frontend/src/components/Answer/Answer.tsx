@@ -55,7 +55,7 @@ export const Answer = ({
                             title="Mostrar conteúdo de apoio"
                             ariaLabel="Mostrar conteúdo de apoio"
                             onClick={() => onSupportingContentClicked()}
-                            disabled={!answer.choices[0].context.data_points?.length}
+                            disabled={!answer.choices[0].context.data_points}
                         />
                     </div>
                 </Stack>

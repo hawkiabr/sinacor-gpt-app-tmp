@@ -1,72 +1,32 @@
-import json
-import logging
-import re
-from typing import Any, AsyncGenerator, Coroutine, Literal, Optional, Union, overload
+from typing import Any, Coroutine, Literal, Optional, Union, overload
 
 from azure.search.documents.aio import SearchClient
-from azure.search.documents.models import QueryType, RawVectorQuery, VectorQuery
+from azure.search.documents.models import VectorQuery
 from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionChunk,
-    ChatCompletionMessageParam,
 )
 
-from approaches.approach import Approach
-from core.messagebuilder import MessageBuilder
+from approaches.approach import ThoughtStep
+from approaches.chatapproach import ChatApproach
+from core.authentication import AuthenticationHelper
 from core.modelhelper import get_token_limit
-from text import nonewlines
 
 
-class ChatReadRetrieveReadApproach(Approach):
-    # Chat roles
-    SYSTEM = "system"
-    USER = "user"
-    ASSISTANT = "assistant"
-
-    NO_RESPONSE = "0"
+class ChatReadRetrieveReadApproach(ChatApproach):
 
     """
     A multi-step approach that first uses OpenAI to turn the user's question into a search query,
     then uses Azure AI Search to retrieve relevant documents, and then sends the conversation history,
     original user question, and search results to OpenAI to generate a response.
     """
-    system_message_chat_conversation = """
-Você é um assistente de IA que ajuda as pessoas a encontrar informações sobre o SINACOR (software da B3), com respostas simples e esclarecedoras.
-Responda SOMENTE com os fatos listados na lista de fontes abaixo. Se não houver informações suficientes abaixo, diga que não sabe. Não gere respostas que não utilizem as fontes abaixo. Se fazer uma pergunta esclarecedora ao usuário ajudar, faça a pergunta.
-Para informações tabulares, retorne-as como uma tabela HTML. Não retorne o formato markdown. Se a pergunta não estiver em inglês, responda no idioma utilizado na pergunta.
-Cada fonte tem um nome seguido de dois pontos e as informações reais, sempre inclua o nome da fonte para cada fato que você usar na resposta. Use colchetes para fazer referência à fonte, por exemplo [info1.txt]. Não combine fontes, liste cada fonte separadamente, por exemplo [info1.txt][info2.pdf].
-{follow_up_questions_prompt}
-{injected_prompt}
-"""
-    follow_up_questions_prompt_content = """Gere três perguntas de acompanhamento muito breves que o usuário provavelmente fará a seguir.
-Coloque as perguntas de acompanhamento entre colchetes duplos. Exemplo:
-<<Existem exclusões para prescrições?>>
-<<Em quais farmácias posso fazer pedidos?>>
-<<Qual é o limite para medicamentos de venda livre?>>
-Não repita perguntas que já foram feitas.
-Certifique-se de que a última pergunta termine com ">>"."""
-
-    query_prompt_template = """Abaixo está um histórico da conversa até o momento, e uma nova pergunta feita pelo usuário que precisa ser respondida pesquisando em uma base de conhecimento sobre o SINACOR (software da B3), com respostas simples e esclarecedoras..
-Você tem acesso a um índice do Azure AI Search com centenas de documentos.
-Gere uma Search Query com base na conversa e na nova pergunta.
-Não inclua nomes de arquivos de origem e nomes de documentos citados, por exemplo, info.txt ou doc.pdf nos termos da consulta de pesquisa.
-Não inclua nenhum texto entre [] ou <<>> nos termos da consulta de pesquisa.
-Não inclua caracteres especiais como '+'.
-Se a pergunta não estiver em português brasileiro, traduza-a para português brasileiro antes de gerar a Search Query.
-Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
-"""
-    query_prompt_few_shots = [
-        {"role": USER, "content": "Quais modalidades de contratos podem ser liquidados a termo?"},
-        {"role": ASSISTANT, "content": "Mostre as modalidades de contratos que podem ser liquidados a termo"},
-        {"role": USER, "content": "Quais são as condições para solicitar uma liquidação antecipada?"},
-        {"role": ASSISTANT, "content": "Mostre as condições para solicitar liquidação antecipada"},
-    ]
 
     def __init__(
         self,
         *,
         search_client: SearchClient,
+        auth_helper: AuthenticationHelper,
         openai_client: AsyncOpenAI,
         chatgpt_model: str,
         chatgpt_deployment: Optional[str],  # Not needed for non-Azure OpenAI
@@ -79,6 +39,7 @@ Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
     ):
         self.search_client = search_client
         self.openai_client = openai_client
+        self.auth_helper = auth_helper
         self.chatgpt_model = chatgpt_model
         self.chatgpt_deployment = chatgpt_deployment
         self.embedding_deployment = embedding_deployment
@@ -88,6 +49,17 @@ Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
         self.query_language = query_language
         self.query_speller = query_speller
         self.chatgpt_token_limit = get_token_limit(chatgpt_model)
+
+    @property
+    def system_message_chat_conversation(self):
+        return """
+        Você é um assistente de IA que ajuda as pessoas a encontrar informações sobre o SINACOR (software da B3), com respostas simples e esclarecedoras.
+        Responda SOMENTE com os fatos listados na lista de fontes abaixo. Se não houver informações suficientes abaixo, diga que não sabe. Não gere respostas que não utilizem as fontes abaixo. Se fazer uma pergunta esclarecedora ao usuário ajudar, faça a pergunta.
+        Para informações tabulares, retorne-as como uma tabela HTML. Não retorne o formato markdown. Se a pergunta não estiver em inglês, responda no idioma utilizado na pergunta.
+        Cada fonte tem um nome seguido de dois pontos e as informações reais, sempre inclua o nome da fonte para cada fato que você usar na resposta. Use colchetes para fazer referência à fonte, por exemplo [info1.txt]. Não combine fontes, liste cada fonte separadamente, por exemplo [info1.txt][info2.pdf].
+        {follow_up_questions_prompt}
+        {injected_prompt}
+        """
 
     @overload
     async def run_until_final_call(
@@ -121,6 +93,8 @@ Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
         use_semantic_captions = True if overrides.get("semantic_captions") and has_text else False
         top = overrides.get("top", 3)
         filter = self.build_filter(overrides, auth_claims)
+        use_semantic_ranker = True if overrides.get("semantic_ranker") and has_text else False
+
         original_user_query = history[-1]["content"]
         user_query_request = "Generate search query for: " + original_user_query
 
@@ -150,6 +124,7 @@ Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
             max_tokens=self.chatgpt_token_limit - len(user_query_request),
             few_shots=self.query_prompt_few_shots,
         )
+
         chat_completion: ChatCompletion = await self.openai_client.chat.completions.create(
             messages=messages,  # type: ignore
             # Azure Open AI takes the deployment name as the model name
@@ -168,60 +143,24 @@ Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
         # If retrieval mode includes vectors, compute an embedding for the query
         vectors: list[VectorQuery] = []
         if has_vector:
-            embedding = await self.openai_client.embeddings.create(
-                # Azure Open AI takes the deployment name as the model name
-                model=self.embedding_deployment if self.embedding_deployment else self.embedding_model,
-                input=query_text,
-            )
-            query_vector = embedding.data[0].embedding
-            vectors.append(RawVectorQuery(vector=query_vector, k=50, fields="embedding"))
+            vectors.append(await self.compute_text_embedding(query_text))
 
         # Only keep the text query if the retrieval mode uses text, otherwise drop it
         if not has_text:
             query_text = None
 
-        # Use semantic L2 reranker if requested and if retrieval mode is text or hybrid (vectors + text)
-        if overrides.get("semantic_ranker") and has_text:
-            r = await self.search_client.search(
-                query_text,
-                filter=filter,
-                query_type=QueryType.SEMANTIC,
-                query_language=self.query_language,
-                query_speller=self.query_speller,
-                semantic_configuration_name="default",
-                top=top,
-                query_caption="extractive|highlight-false" if use_semantic_captions else None,
-                vector_queries=vectors,
-            )
-        else:
-            r = await self.search_client.search(query_text, filter=filter, top=top, vector_queries=vectors)
-        if use_semantic_captions:
-            results = [
-                doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc["@search.captions"]]))
-                async for doc in r
-            ]
-        else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) async for doc in r]
-        content = "\n".join(results)
+        results = await self.search(top, query_text, filter, vectors, use_semantic_ranker, use_semantic_captions)
 
-        follow_up_questions_prompt = (
-            self.follow_up_questions_prompt_content if overrides.get("suggest_followup_questions") else ""
-        )
+        sources_content = self.get_sources_content(results, use_semantic_captions, use_image_citation=False)
+        content = "\n".join(sources_content)
 
         # STEP 3: Generate a contextual and content specific answer using the search results and chat history
 
         # Allow client to replace the entire prompt, or to inject into the exiting prompt using >>>
-        prompt_override = overrides.get("prompt_template")
-        if prompt_override is None:
-            system_message = self.system_message_chat_conversation.format(
-                injected_prompt="", follow_up_questions_prompt=follow_up_questions_prompt
-            )
-        elif prompt_override.startswith(">>>"):
-            system_message = self.system_message_chat_conversation.format(
-                injected_prompt=prompt_override[3:] + "\n", follow_up_questions_prompt=follow_up_questions_prompt
-            )
-        else:
-            system_message = prompt_override.format(follow_up_questions_prompt=follow_up_questions_prompt)
+        system_message = self.get_system_prompt(
+            overrides.get("prompt_template"),
+            self.follow_up_questions_prompt_content if overrides.get("suggest_followup_questions") else "",
+        )
 
         response_token_limit = 1024
         messages_token_limit = self.chatgpt_token_limit - response_token_limit
@@ -233,12 +172,24 @@ Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
             user_content=original_user_query + "\n\nSources:\n" + content,
             max_tokens=messages_token_limit,
         )
-        msg_to_display = "\n\n".join([str(message) for message in messages])
+
+        data_points = {"text": sources_content}
 
         extra_info = {
-            "data_points": results,
-            "thoughts": f"Searched for:<br>{query_text}<br><br>Conversations:<br>"
-            + msg_to_display.replace("\n", "<br>"),
+            "data_points": data_points,
+            "thoughts": [
+                ThoughtStep(
+                    "Consulta original do usuário",
+                    original_user_query,
+                ),
+                ThoughtStep(
+                    "Consulta de pesquisa gerada",
+                    query_text,
+                    {"use_semantic_captions": use_semantic_captions, "has_vector": has_vector},
+                ),
+                ThoughtStep("Resultados", [result.serialize_for_results() for result in results]),
+                ThoughtStep("Prompt", [str(message) for message in messages]),
+            ],
         }
 
         chat_coroutine = self.openai_client.chat.completions.create(
@@ -251,136 +202,3 @@ Se você não conseguir gerar uma Search Query, retorne apenas o número 0.
             stream=should_stream,
         )
         return (extra_info, chat_coroutine)
-
-    async def run_without_streaming(
-        self,
-        history: list[dict[str, str]],
-        overrides: dict[str, Any],
-        auth_claims: dict[str, Any],
-        session_state: Any = None,
-    ) -> dict[str, Any]:
-        extra_info, chat_coroutine = await self.run_until_final_call(
-            history, overrides, auth_claims, should_stream=False
-        )
-        chat_completion_response: ChatCompletion = await chat_coroutine
-        chat_resp = chat_completion_response.model_dump()  # Convert to dict to make it JSON serializable
-        chat_resp["choices"][0]["context"] = extra_info
-        if overrides.get("suggest_followup_questions"):
-            content, followup_questions = self.extract_followup_questions(chat_resp["choices"][0]["message"]["content"])
-            chat_resp["choices"][0]["message"]["content"] = content
-            chat_resp["choices"][0]["context"]["followup_questions"] = followup_questions
-        chat_resp["choices"][0]["session_state"] = session_state
-        return chat_resp
-
-    async def run_with_streaming(
-        self,
-        history: list[dict[str, str]],
-        overrides: dict[str, Any],
-        auth_claims: dict[str, Any],
-        session_state: Any = None,
-    ) -> AsyncGenerator[dict, None]:
-        extra_info, chat_coroutine = await self.run_until_final_call(
-            history, overrides, auth_claims, should_stream=True
-        )
-        yield {
-            "choices": [
-                {
-                    "delta": {"role": self.ASSISTANT},
-                    "context": extra_info,
-                    "session_state": session_state,
-                    "finish_reason": None,
-                    "index": 0,
-                }
-            ],
-            "object": "chat.completion.chunk",
-        }
-
-        followup_questions_started = False
-        followup_content = ""
-        async for event_chunk in await chat_coroutine:
-            # "2023-07-01-preview" API version has a bug where first response has empty choices
-            event = event_chunk.model_dump()  # Convert pydantic model to dict
-            if event["choices"]:
-                # if event contains << and not >>, it is start of follow-up question, truncate
-                content = event["choices"][0]["delta"].get("content")
-                content = content or ""  # content may either not exist in delta, or explicitly be None
-                if overrides.get("suggest_followup_questions") and "<<" in content:
-                    followup_questions_started = True
-                    earlier_content = content[: content.index("<<")]
-                    if earlier_content:
-                        event["choices"][0]["delta"]["content"] = earlier_content
-                        yield event
-                    followup_content += content[content.index("<<") :]
-                elif followup_questions_started:
-                    followup_content += content
-                else:
-                    yield event
-        if followup_content:
-            _, followup_questions = self.extract_followup_questions(followup_content)
-            yield {
-                "choices": [
-                    {
-                        "delta": {"role": self.ASSISTANT},
-                        "context": {"followup_questions": followup_questions},
-                        "finish_reason": None,
-                        "index": 0,
-                    }
-                ],
-                "object": "chat.completion.chunk",
-            }
-
-    async def run(
-        self, messages: list[dict], stream: bool = False, session_state: Any = None, context: dict[str, Any] = {}
-    ) -> Union[dict[str, Any], AsyncGenerator[dict[str, Any], None]]:
-        overrides = context.get("overrides", {})
-        auth_claims = context.get("auth_claims", {})
-        if stream is False:
-            return await self.run_without_streaming(messages, overrides, auth_claims, session_state)
-        else:
-            return self.run_with_streaming(messages, overrides, auth_claims, session_state)
-
-    def get_messages_from_history(
-        self,
-        system_prompt: str,
-        model_id: str,
-        history: list[dict[str, str]],
-        user_content: str,
-        max_tokens: int,
-        few_shots=[],
-    ) -> list[ChatCompletionMessageParam]:
-        message_builder = MessageBuilder(system_prompt, model_id)
-
-        # Add examples to show the chat what responses we want. It will try to mimic any responses and make sure they match the rules laid out in the system message.
-        for shot in reversed(few_shots):
-            message_builder.insert_message(shot.get("role"), shot.get("content"))
-
-        append_index = len(few_shots) + 1
-
-        message_builder.insert_message(self.USER, user_content, index=append_index)
-        total_token_count = message_builder.count_tokens_for_message(dict(message_builder.messages[-1]))  # type: ignore
-
-        newest_to_oldest = list(reversed(history[:-1]))
-        for message in newest_to_oldest:
-            potential_message_count = message_builder.count_tokens_for_message(message)
-            if (total_token_count + potential_message_count) > max_tokens:
-                logging.debug("Reached max tokens of %d, history will be truncated", max_tokens)
-                break
-            message_builder.insert_message(message["role"], message["content"], index=append_index)
-            total_token_count += potential_message_count
-        return message_builder.messages
-
-    def get_search_query(self, chat_completion: ChatCompletion, user_query: str):
-        response_message = chat_completion.choices[0].message
-        if function_call := response_message.function_call:
-            if function_call.name == "search_sources":
-                arg = json.loads(function_call.arguments)
-                search_query = arg.get("search_query", self.NO_RESPONSE)
-                if search_query != self.NO_RESPONSE:
-                    return search_query
-        elif query_text := response_message.content:
-            if query_text.strip() != self.NO_RESPONSE:
-                return query_text
-        return user_query
-
-    def extract_followup_questions(self, content: str):
-        return content.split("<<")[0], re.findall(r"<<([^>>]+)>>", content)

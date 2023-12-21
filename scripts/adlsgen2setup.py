@@ -82,6 +82,9 @@ class AdlsGen2Setup:
                         if directory not in directories:
                             logging.error(f"File {file} has unknown directory {directory}, exiting...")
                             return
+                        await self.upload_file(
+                            directory_client=directories[directory], file_path=os.path.join(self.data_directory, file)
+                        )
 
                     logging.info("Setting access control...")
                     for directory, access_control in self.data_access_control_format["directories"].items():

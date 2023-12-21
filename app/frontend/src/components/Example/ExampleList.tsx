@@ -2,33 +2,29 @@ import { Example } from "./Example";
 
 import styles from "./Example.module.css";
 
-export type ExampleModel = {
-    text: string;
-    value: string;
-};
+const DEFAULT_EXAMPLES: string[] = [
+    "Quais são os principais componentes do FixGear?",
+    "Qual consulta valida se o módulo de Faturamento BMF está instalado?",
+    "É possível liquidar contratos comprados a termo?"
+];
 
-const EXAMPLES: ExampleModel[] = [
-    {
-        text: "Quais são os principais componentes do FixGear?",
-        value: "Quais são os principais componentes do FixGear?"
-    },
-    {
-        text: "Qual consulta valida se o módulo de Faturamento BMF está instalado?",
-        value: "Qual consulta valida se o módulo de Faturamento BMF está instalado?"
-    },
-    { text: "É possível liquidar contratos comprados a termo?", value: "É possível liquidar contratos comprados a termo?" }
+const GPT4V_EXAMPLES: string[] = [
+    "Compare the impact of interest rates and GDP in financial markets.",
+    "What is the expected trend for the S&P 500 index over the next five years? Compare it to the past S&P 500 performance",
+    "Can you identify any correlation between oil prices and stock market trends?"
 ];
 
 interface Props {
     onExampleClicked: (value: string) => void;
+    useGPT4V?: boolean;
 }
 
-export const ExampleList = ({ onExampleClicked }: Props) => {
+export const ExampleList = ({ onExampleClicked, useGPT4V }: Props) => {
     return (
         <ul className={styles.examplesNavList}>
-            {EXAMPLES.map((x, i) => (
+            {(useGPT4V ? GPT4V_EXAMPLES : DEFAULT_EXAMPLES).map((question, i) => (
                 <li key={i}>
-                    <Example text={x.text} value={x.value} onClick={onExampleClicked} />
+                    <Example text={question} value={question} onClick={onExampleClicked} />
                 </li>
             ))}
         </ul>

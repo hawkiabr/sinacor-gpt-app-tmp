@@ -9,8 +9,11 @@ done <<< "$output"
 echo "Environment variables set."
 
 roles=(
-    "c2a7bb98-f8ae-485e-9261-34649d2249a8"
-    "25a5611e-be94-4b5e-b731-b2cdb9c9713f"
+    "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
+    "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1"
+    "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+    "1407120a-92aa-4202-b7e9-c0e197c71c8f"
+    "8ebe5a00-799e-43f5-93ac-243d3dce84a7"
 )
 
 if [ -z "$AZURE_RESOURCE_GROUP" ]; then

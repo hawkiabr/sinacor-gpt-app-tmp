@@ -1,2 +1,2 @@
-# hwk-template-tools
-Modelo para ferramentas da Hawkia.
+# Sinacor GPT
+Repositório temporário da Hawkia.

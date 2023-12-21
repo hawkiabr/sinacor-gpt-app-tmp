@@ -22,9 +22,15 @@
 
 .supportingContentItemHeader {
     margin: 0;
+    font-size: small;
 }
 
 .supportingContentItemText {
     margin-bottom: 0;
     font-weight: 300;
+    font-size: small;
+}
+
+.supportingContentItemImage {
+    object-fit: contain;
 }

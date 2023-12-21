@@ -2,9 +2,6 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "applicationInsightsName": {
-      "value": "${AZURE_APP_INSIGHTS}"
-    },
     "appServicePlanName": {
       "value": "${AZURE_APP_SERVICE_PLAN}"
     },
@@ -89,8 +86,20 @@
     "useApplicationInsights": {
       "value": "${AZURE_USE_APPLICATION_INSIGHTS=true}"
     },
+    "useGPT4V": {
+      "value": "${USE_GPT4V=false}"
+    },
     "useAuthentication": {
       "value": "${AZURE_USE_AUTHENTICATION=false}"
+    },
+    "enforceAccessControl": {
+      "value": "${AZURE_ENFORCE_ACCESS_CONTROL=false}"
+    },
+    "tenantId": {
+      "value": "${AZURE_TENANT_ID}"
+    },
+    "authTenantId": {
+      "value": "${AZURE_AUTH_TENANT_ID}"
     },
     "serverAppId": {
       "value": "${AZURE_SERVER_APP_ID}"
@@ -100,6 +109,9 @@
     },
     "clientAppId": {
       "value": "${AZURE_CLIENT_APP_ID}"
+    },
+    "clientAppSecret": {
+      "value": "${AZURE_CLIENT_APP_SECRET}"
     },
     "allowedOrigin": {
       "value": "${ALLOWED_ORIGIN}"
