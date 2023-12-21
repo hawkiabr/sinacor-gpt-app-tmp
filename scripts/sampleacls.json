@@ -1,0 +1,101 @@
+{
+    "files": {
+        "gap - implantação - passo 02 - execução do setup.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "gap - implantação - passo 01 - instalar runtime atualizado.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "conciliação de posição vista.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "gap - arquitetura back.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "eventos corporativos.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "mensageria - smpiso.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "gap - pré requisitos.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "transferência mensageria e arquivo.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "gap - arquitetura front.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "ga prime - stvm.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "desbloqueio de usuario.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "cadastro de instituição financeira e cadastro de novo banco.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "manual fix gear.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "configuracao de envio de login e senha por email.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "abertura do módulo ga.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "ga prime - manifestar interesse nos eventos.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "gap - implantação - passo 03 - verificar instalação.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "reinvestimento de tesouro direto.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "gap - sinacor.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "ga prime - cancelar manifestação de interesse.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "ga prime - eventos voluntários.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "liquidação antecipada.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "gap - o projeto.pdf": {
+            "directory": "gptkb-gap"
+        },
+        "cadastro de conta master e cadastro de vinculo.pdf": {
+            "directory": "gptkb-sinacor"
+        },
+        "cadastro de cliente menor de idade.pdf": {
+            "directory": "gptkb-sinacor"
+        }
+    },
+    "directories": {
+        "gptkb-sinacor": {
+            "groups": [
+                "GPTKB_Sinacor"
+            ]
+        },
+        "gptkb-gap": {
+            "groups": [
+                "GPTKB_Gap"
+            ]
+        },
+        "/": {
+            "groups": [
+                "GPTKB_Admins"
+            ]
+        }
+    },
+    "groups": [
+        "GPTKB_Admins",
+        "GPTKB_Gap",
+        "GPTKB_Sinacor"
+    ]
+}
