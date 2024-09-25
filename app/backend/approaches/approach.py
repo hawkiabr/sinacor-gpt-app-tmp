@@ -28,6 +28,8 @@ class Document:
     oids: Optional[List[str]]
     groups: Optional[List[str]]
     captions: List[CaptionResult]
+    score: Optional[float] = None
+    reranker_score: Optional[float] = None
 
     def serialize_for_results(self) -> dict[str, Any]:
         return {
@@ -40,16 +42,20 @@ class Document:
             "sourcefile": self.sourcefile,
             "oids": self.oids,
             "groups": self.groups,
-            "captions": [
-                {
-                    "additional_properties": caption.additional_properties,
-                    "text": caption.text,
-                    "highlights": caption.highlights,
-                }
-                for caption in self.captions
-            ]
-            if self.captions
-            else [],
+            "captions": (
+                [
+                    {
+                        "additional_properties": caption.additional_properties,
+                        "text": caption.text,
+                        "highlights": caption.highlights,
+                    }
+                    for caption in self.captions
+                ]
+                if self.captions
+                else []
+            ),
+            "score": self.score,
+            "reranker_score": self.reranker_score,
         }
 
     @classmethod
@@ -94,7 +100,7 @@ class Approach:
         self.openai_host = openai_host
 
     def build_filter(self, overrides: dict[str, Any], auth_claims: dict[str, Any]) -> Optional[str]:
-        exclude_category = overrides.get("exclude_category") or None
+        exclude_category = overrides.get("exclude_category")
         security_filter = self.auth_helper.build_security_filters(overrides, auth_claims)
         filters = []
         if exclude_category:

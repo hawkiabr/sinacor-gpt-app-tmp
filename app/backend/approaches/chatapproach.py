@@ -82,6 +82,8 @@ class ChatApproach(Approach, ABC):
         return user_query
 
     def extract_followup_questions(self, content: str):
+        if content is None:
+            return content, []
         return content.split("<<")[0], re.findall(r"<<([^>>]+)>>", content)
 
     def get_messages_from_history(
