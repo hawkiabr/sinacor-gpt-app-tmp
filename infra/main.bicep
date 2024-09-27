@@ -195,7 +195,7 @@ module backend 'core/host/appservice.bicep' = {
         managedIdentity: true
         allowedOrigins: [  allowedOrigin  ]
         appSettings: {
-            AZURE_STORAGE_ACCOUNT: storage.outputs.name
+            AZURE_STORAGE_ACCOUNT: storageExisting.name //storage.outputs.name
             AZURE_STORAGE_CONTAINER: storageContainerName
             AZURE_SEARCH_INDEX: searchIndexName
             AZURE_SEARCH_SERVICE: searchService.outputs.name
@@ -343,7 +343,12 @@ module searchService 'core/search/search-services.bicep' = {
     }
 }
 
-module storage 'core/storage/storage-account.bicep' = {
+resource storageExisting 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+    name: storageAccountName
+    scope: storageResourceGroup
+}
+
+/*module storage 'core/storage/storage-account.bicep' = {
     name: 'storage'
     scope: storageResourceGroup
     params: {
@@ -366,7 +371,7 @@ module storage 'core/storage/storage-account.bicep' = {
             }
         ]
     }
-}
+}*/
 
 // USER ROLES
 module openAiRoleUser 'core/security/role.bicep' = if (openAiHost == 'azure') {
@@ -517,7 +522,7 @@ output AZURE_SEARCH_INDEX string = searchIndexName
 output AZURE_SEARCH_SERVICE string = searchService.outputs.name
 output AZURE_SEARCH_SERVICE_RESOURCE_GROUP string = searchServiceResourceGroup.name
 
-output AZURE_STORAGE_ACCOUNT string = storage.outputs.name
+output AZURE_STORAGE_ACCOUNT string = storageExisting.name
 output AZURE_STORAGE_CONTAINER string = storageContainerName
 output AZURE_STORAGE_RESOURCE_GROUP string = storageResourceGroup.name
 
